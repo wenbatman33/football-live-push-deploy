@@ -160,6 +160,25 @@
   /* ── Match missing 狀態 ──────────────────────────── */
   .missing { padding: 30px 16px; text-align: center; color: #888; font-size: 12px; line-height: 1.6; }
 
+  /* ── 嵌入模式：填滿 iframe、不拖動、不顯示收納按鈕 ── */
+  #widget.embedded {
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    max-height: 100% !important;
+    height: 100%;
+    border-radius: 0;
+    box-shadow: none;
+    border: 0;
+    transform: none !important;
+  }
+  #widget.embedded .header { cursor: default; }
+  #widget.embedded .header:active { cursor: default; }
+  #widget.embedded .dock-btns { display: none; }
+
   /* ═══════════════════════════════════════════════════════════════
      燈箱動畫：進球 / 紅黃牌
      ═══════════════════════════════════════════════════════════════ */
@@ -793,16 +812,23 @@ function renderCard(evt, m, type) {
   `;
 }
 
-// ── 拖動 + 收納（與先前 widget 同概念） ──────────────
-const STATE_KEY = 'flp-widget-ui-' + (MATCH_ID || 'default');
+// ── 嵌入模式：?embedded=1 時填滿 iframe、停用拖動與收納 ──
+const IS_EMBEDDED = params.get('embedded') === '1';
 const widget = $('widget');
 const handle = $('drag-handle');
+
+if (IS_EMBEDDED) {
+  widget.classList.add('embedded');
+}
+
+// ── 拖動 + 收納（獨立視窗模式才啟用） ──────────────
+const STATE_KEY = 'flp-widget-ui-' + (MATCH_ID || 'default');
 
 const initialDock = params.get('docked'); // 允許 URL 指定初始位置，e.g. ?docked=right
 let ui = loadUi() || (initialDock === 'left' || initialDock === 'right'
   ? { mode: initialDock, collapsed: true, left: 16, top: 16 }
   : { mode: 'free', collapsed: false, left: 16, top: 16 });
-applyUi();
+if (!IS_EMBEDDED) applyUi();
 
 function loadUi() { try { return JSON.parse(localStorage.getItem(STATE_KEY) || 'null'); } catch (_) { return null; } }
 function saveUi() { try { localStorage.setItem(STATE_KEY, JSON.stringify(ui)); } catch (_) {} }
@@ -865,37 +891,39 @@ function onPointerUp() {
     saveUi();
   }
 }
-handle.addEventListener('mousedown',  onPointerDown);
-handle.addEventListener('touchstart', onPointerDown, { passive: false });
-document.addEventListener('mousemove',  onPointerMove);
-document.addEventListener('touchmove',  onPointerMove, { passive: false });
-document.addEventListener('mouseup',    onPointerUp);
-document.addEventListener('touchend',   onPointerUp);
+if (!IS_EMBEDDED) {
+  handle.addEventListener('mousedown',  onPointerDown);
+  handle.addEventListener('touchstart', onPointerDown, { passive: false });
+  document.addEventListener('mousemove',  onPointerMove);
+  document.addEventListener('touchmove',  onPointerMove, { passive: false });
+  document.addEventListener('mouseup',    onPointerUp);
+  document.addEventListener('touchend',   onPointerUp);
 
-$('btn-dock-left').addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (ui.mode === 'left') ui.collapsed = !ui.collapsed;
-  else { ui.mode = 'left'; ui.collapsed = true; }
-  applyUi(); saveUi();
-});
-$('btn-dock-right').addEventListener('click', (e) => {
-  e.stopPropagation();
-  if (ui.mode === 'right') ui.collapsed = !ui.collapsed;
-  else { ui.mode = 'right'; ui.collapsed = true; }
-  applyUi(); saveUi();
-});
-widget.addEventListener('click', (e) => {
-  if (!widget.classList.contains('collapsed')) return;
-  if (e.target.closest('.icon-btn')) return;
-  ui.collapsed = false; applyUi(); saveUi();
-});
-window.addEventListener('resize', () => {
-  if (ui.mode !== 'free') return;
-  const w = widget.offsetWidth;
-  ui.left = Math.max(-w + 40, Math.min(window.innerWidth - 40, ui.left));
-  ui.top  = Math.max(0, Math.min(window.innerHeight - 40, ui.top));
-  applyUi();
-});
+  $('btn-dock-left').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (ui.mode === 'left') ui.collapsed = !ui.collapsed;
+    else { ui.mode = 'left'; ui.collapsed = true; }
+    applyUi(); saveUi();
+  });
+  $('btn-dock-right').addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (ui.mode === 'right') ui.collapsed = !ui.collapsed;
+    else { ui.mode = 'right'; ui.collapsed = true; }
+    applyUi(); saveUi();
+  });
+  widget.addEventListener('click', (e) => {
+    if (!widget.classList.contains('collapsed')) return;
+    if (e.target.closest('.icon-btn')) return;
+    ui.collapsed = false; applyUi(); saveUi();
+  });
+  window.addEventListener('resize', () => {
+    if (ui.mode !== 'free') return;
+    const w = widget.offsetWidth;
+    ui.left = Math.max(-w + 40, Math.min(window.innerWidth - 40, ui.left));
+    ui.top  = Math.max(0, Math.min(window.innerHeight - 40, ui.top));
+    applyUi();
+  });
+}
 
 connect();
 </script>

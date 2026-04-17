@@ -42,7 +42,7 @@
   try { origin = new URL(src, location.href).origin; }
   catch (_) { origin = location.origin; }
 
-  var qs = 'match=' + encodeURIComponent(matchId);
+  var qs = 'match=' + encodeURIComponent(matchId) + '&embedded=1';
   if (docked === 'left' || docked === 'right') qs += '&docked=' + docked;
   var widgetUrl = origin + '/widget.html?' + qs;
 
@@ -70,7 +70,8 @@
   iframe.title = '足球即時推播';
   iframe.allow = 'clipboard-read; clipboard-write';
   iframe.style.cssText = 'width:100%;height:100%;border:0;background:transparent;' +
-    'pointer-events:auto;color-scheme:normal;';
+    'pointer-events:auto;color-scheme:normal;' +
+    'border-radius:12px;box-shadow:0 10px 32px rgba(0,0,0,0.45);';
   iframe.setAttribute('frameborder', '0');
   iframe.setAttribute('scrolling', 'no');
   wrap.appendChild(iframe);
