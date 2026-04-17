@@ -239,6 +239,12 @@
       <div>請從左側選一場比賽，或新增一場</div>
     </div>
     <div id="center-main" style="display:none">
+      <div id="match-id-bar" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:rgba(93,223,93,0.08);border:1px solid rgba(93,223,93,0.25);border-radius:6px;margin-bottom:12px;font-size:12px">
+        <span style="color:#8ea">比賽 ID：</span>
+        <code id="match-id-text" style="flex:1;font-family:ui-monospace,monospace;color:#9cf;word-break:break-all"></code>
+        <button class="small" onclick="copyMatchId()" title="複製比賽 ID">📋 複製</button>
+        <button class="small" onclick="openWidgetTab()" title="在新分頁打開觀眾 widget">🔗 開 widget</button>
+      </div>
       <h2>比分與狀態</h2>
       <div class="score-board" id="score-board"></div>
 
@@ -348,6 +354,7 @@ function renderMatches() {
   const statusLabel = { upcoming: '未開賽', live: '進行中', halftime: '中場', finished: '已結束' };
   container.innerHTML = matchList.map(m => {
     const sportIcon = m.sport === 'basketball' ? '🏀' : '⚽';
+    const shortId = m.id.split('-').slice(-1)[0];
     return `
     <div class="match-item ${currentMatch?.id === m.id ? 'active' : ''}" onclick="selectMatch('${m.id}')">
       <div class="teams">
@@ -361,6 +368,7 @@ function renderMatches() {
         <span class="score">${m.homeScore} : ${m.awayScore}</span>
         <span class="status-badge ${m.status}">${statusLabel[m.status] || m.status}</span>
       </div>
+      <div style="font-size:10px;color:#556;font-family:ui-monospace,monospace;margin-top:2px">#${shortId}</div>
     </div>`;
   }).join('');
 }
@@ -506,10 +514,27 @@ async function selectMatch(id) {
   renderMatches();
   $('center-empty').style.display = 'none';
   $('center-main').style.display = 'block';
+  $('match-id-text').textContent = id;
   renderCenter();
   // 預覽 iframe 指向 widget
   $('preview-frame').src = `widget.html?match=${id}`;
   renderEmbedInfo(id);
+}
+
+// 複製目前比賽 ID
+function copyMatchId() {
+  if (!currentMatch) return;
+  navigator.clipboard?.writeText(currentMatch.id);
+  const btn = event.currentTarget;
+  const prev = btn.textContent;
+  btn.textContent = '✓ 已複製';
+  setTimeout(() => btn.textContent = prev, 1200);
+}
+
+// 開獨立 widget 分頁
+function openWidgetTab() {
+  if (!currentMatch) return;
+  window.open(`widget.html?match=${currentMatch.id}`, '_blank');
 }
 
 async function refreshCurrentMatch() {
