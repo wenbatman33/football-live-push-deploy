@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>足球直播推播 · 管理後台</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0a1628;
+    --panel: #0f1e36;
+    --panel-2: #132643;
+    --line: rgba(255,255,255,0.08);
+    --muted: #8ea;
+    --text: #e8ecf4;
+    --home: #5ba3f5;
+    --away: #f5a623;
+    --accent: #5ddf5d;
+    --danger: #ff5555;
+  }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    height: 100vh; display: flex; flex-direction: column;
+  }
+  header {
+    padding: 10px 16px;
+    background: linear-gradient(180deg, #1a2744, #0f1e36);
+    border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 12px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+  header .server-status {
+    margin-left: auto; font-size: 11px; color: #8a9;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #777; box-shadow: 0 0 5px currentColor; }
+  .dot.ok { background: var(--accent); color: var(--accent); }
+  .dot.bad { background: var(--danger); color: var(--danger); }
+
+  main {
+    flex: 1; display: grid;
+    grid-template-columns: 260px 1fr 360px;
+    gap: 1px; background: var(--line);
+    overflow: hidden;
+  }
+  .col { background: var(--panel); overflow-y: auto; padding: 12px; }
+  .col h2 {
+    font-size: 12px; font-weight: 700; color: #9ab;
+    letter-spacing: 2px; margin-bottom: 10px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* ── 比賽列 ───────────────────────────────────────── */
+  .match-item {
+    background: var(--panel-2);
+    border: 1px solid transparent;
+    border-radius: 8px; padding: 10px; margin-bottom: 6px;
+    cursor: pointer; transition: all 0.15s;
+  }
+  .match-item:hover { border-color: rgba(93,223,93,0.3); }
+  .match-item.active { border-color: var(--accent); background: rgba(93,223,93,0.08); }
+  .match-item { position: relative; }
+  .match-item .teams { font-size: 13px; font-weight: 600; display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+  .match-item .mi-del {
+    opacity: 0; padding: 2px 6px; font-size: 11px;
+    background: rgba(255,85,85,0.15); border: 1px solid rgba(255,85,85,0.3);
+    color: #ff9090; margin-left: auto;
+    transition: opacity 0.15s, background 0.15s;
+  }
+  .match-item:hover .mi-del { opacity: 1; }
+  .match-item .mi-del:hover { background: rgba(255,85,85,0.3); color: #fff; }
+  .match-item .home-name { color: var(--home); }
+  .match-item .away-name { color: var(--away); }
+  .match-item .vs { color: #556; font-size: 11px; }
+  .match-item .row2 { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; font-size: 11px; color: #8a9; }
+  .match-item .score { font-weight: 700; color: var(--text); font-size: 14px; letter-spacing: 1px; }
+
+  .status-badge {
+    padding: 1px 6px; border-radius: 3px; font-size: 9px; font-weight: 700; letter-spacing: 1px;
+  }
+  .status-badge.upcoming { background: rgba(138,168,255,0.2); color: #8aa8ff; }
+  .status-badge.live { background: rgba(255,85,85,0.25); color: #ff9595; animation: pulse 1.6s infinite; }
+  .status-badge.halftime { background: rgba(245,197,66,0.25); color: #f5c542; }
+  .status-badge.finished { background: rgba(100,100,100,0.3); color: #aaa; }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+
+  /* ── 按鈕 / 表單元件 ──────────────────────────────── */
+  button, .btn {
+    background: #1a3050; border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text); padding: 6px 12px; border-radius: 6px;
+    font-size: 12px; cursor: pointer; transition: all 0.15s;
+    font-family: inherit;
+  }
+  button:hover { background: #245080; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.primary { background: #1b5e1b; border-color: rgba(93,223,93,0.4); color: #e8ffe8; }
+  button.primary:hover { background: #2a7a2a; }
+  button.danger { background: #5e1b1b; border-color: rgba(255,85,85,0.4); color: #ffe8e8; }
+  button.danger:hover { background: #7a2a2a; }
+  button.warn { background: #5e4a1b; border-color: rgba(245,197,66,0.4); color: #fff6d5; }
+  button.ghost { background: transparent; }
+  button.small { padding: 3px 8px; font-size: 11px; }
+  button.block { display: block; width: 100%; margin-top: 8px; }
+
+  input[type=text], input[type=number], select {
+    background: #1a3050; border: 1px solid rgba(255,255,255,0.12);
+    color: var(--text); padding: 6px 10px; border-radius: 6px;
+    font-size: 12px; font-family: inherit;
+  }
+  input:focus, select:focus { outline: none; border-color: var(--accent); }
+  label { font-size: 11px; color: #9ab; display: block; margin-bottom: 4px; }
+
+  .form-row { display: flex; gap: 6px; margin-bottom: 8px; }
+  .form-row > * { flex: 1; }
+  .field { margin-bottom: 10px; }
+
+  /* ── 中欄：比賽儀表板 ─────────────────────────────── */
+  #center-empty {
+    text-align: center; padding: 60px 20px; color: #556;
+  }
+  .score-board {
+    background: var(--panel-2); border-radius: 8px; padding: 14px;
+    margin-bottom: 14px; border: 1px solid var(--line);
+  }
+  .score-board .teams {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center;
+  }
+  .score-board .side { text-align: center; }
+  .score-board .side .name { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .score-board .side.home .name { color: var(--home); }
+  .score-board .side.away .name { color: var(--away); }
+  .score-board .score-num {
+    font-size: 38px; font-weight: 800; letter-spacing: 2px;
+    display: flex; justify-content: center; align-items: center; gap: 8px;
+  }
+  .score-board .score-num input {
+    width: 60px; font-size: 32px; text-align: center; padding: 2px;
+  }
+  .score-board .score-btns { display: flex; gap: 4px; justify-content: center; margin-top: 6px; }
+
+  .status-row { display: flex; gap: 6px; margin-top: 10px; justify-content: center; flex-wrap: wrap; }
+  .status-row button { flex: 0 0 auto; }
+  .status-row button.active { background: var(--accent); color: #001200; border-color: var(--accent); }
+
+  /* ── 事件建立 + 列表 ──────────────────────────────── */
+  .event-creator {
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 12px; margin-bottom: 14px;
+  }
+  .type-grid {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px;
+    margin-bottom: 10px;
+  }
+  .type-btn {
+    padding: 6px 4px; text-align: center; font-size: 10px;
+    background: #1a3050; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 6px; cursor: pointer; transition: all 0.15s;
+  }
+  .type-btn:hover { background: #245080; }
+  .type-btn.active { background: var(--accent); color: #002; border-color: var(--accent); font-weight: 700; }
+  .type-btn .ico { font-size: 16px; display: block; margin-bottom: 2px; }
+
+  .event-list {
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 4px;
+  }
+  .event-item {
+    display: grid;
+    grid-template-columns: auto auto 1fr auto;
+    gap: 10px; align-items: center;
+    padding: 8px 10px; border-radius: 6px;
+    font-size: 12px; transition: background 0.15s;
+  }
+  .event-item:hover { background: rgba(255,255,255,0.03); }
+  .event-item + .event-item { border-top: 1px solid var(--line); }
+  .event-item .t { color: #f5c542; font-weight: 700; font-size: 11px; min-width: 50px; }
+  .event-item .ico-big { font-size: 16px; }
+  .event-item .desc { line-height: 1.3; }
+  .event-item .tm-home { color: var(--home); }
+  .event-item .tm-away { color: var(--away); }
+  .event-item .actions { display: flex; gap: 4px; flex-shrink: 0; }
+  .event-item.pushed { opacity: 0.85; }
+  .event-item.pushed .desc::before {
+    content: '✓ 已推送 '; color: var(--accent); font-size: 10px; margin-right: 4px;
+  }
+
+  /* ── 右欄：預覽 ───────────────────────────────────── */
+  #preview-frame {
+    border: 1px solid var(--line); border-radius: 8px;
+    width: 100%; height: 480px; background: #111;
+  }
+  .embed-block {
+    background: var(--panel-2); border-radius: 8px; padding: 10px;
+    margin-top: 12px; border: 1px solid var(--line);
+    font-family: ui-monospace, 'SF Mono', monospace; font-size: 11px;
+    color: #9cf; word-break: break-all; position: relative;
+  }
+  .embed-block button {
+    position: absolute; top: 6px; right: 6px; padding: 2px 8px; font-size: 10px;
+  }
+  .hint { font-size: 11px; color: #667; margin-top: 6px; }
+
+  /* Sport 選項 radio */
+  .sport-opt {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
+    cursor: pointer; font-size: 13px; transition: all 0.15s;
+    background: #1a3050;
+  }
+  .sport-opt:hover { background: #245080; }
+  .sport-opt input { margin: 0; cursor: pointer; }
+  .sport-opt:has(input:checked) { background: rgba(93,223,93,0.15); border-color: #5ddf5d; color: #fff; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>⚽ 足球直播推播管理後台</h1>
+  <div class="server-status">
+    <span class="dot" id="server-dot"></span>
+    <span id="server-text">連線中…</span>
+  </div>
+</header>
+
+<main>
+  <!-- 左欄：比賽列表 -->
+  <section class="col" id="col-left">
+    <h2>比賽</h2>
+    <button class="primary block" onclick="openCreateDialog()">＋ 新增比賽</button>
+    <div id="match-list" style="margin-top: 10px"></div>
+  </section>
+
+  <!-- 中欄：當前比賽編輯 -->
+  <section class="col" id="col-center">
+    <div id="center-empty">
+      <div style="font-size: 48px; margin-bottom: 12px">📋</div>
+      <div>請從左側選一場比賽，或新增一場</div>
+    </div>
+    <div id="center-main" style="display:none">
+      <h2>比分與狀態</h2>
+      <div class="score-board" id="score-board"></div>
+
+      <h2 style="margin-top: 18px">新增事件</h2>
+      <div class="event-creator" id="event-creator"></div>
+
+      <h2 style="margin-top: 18px">事件列表（點推送通知觀眾）</h2>
+      <div class="event-list" id="event-list"></div>
+    </div>
+  </section>
+
+  <!-- 右欄：觀眾 widget 預覽 + 嵌入資訊 -->
+  <section class="col" id="col-right">
+    <h2>觀眾 Widget 預覽</h2>
+    <iframe id="preview-frame" src="about:blank" title="預覽"></iframe>
+    <div class="hint">這是觀眾實際看到的畫面，會即時同步你的推送</div>
+
+    <h2 style="margin-top: 18px">嵌入到其他網站</h2>
+    <div id="embed-info">
+      <div class="hint">選擇比賽後會顯示嵌入用的代碼</div>
+    </div>
+  </section>
+</main>
+
+<!-- 新增比賽 dialog -->
+<div id="create-dialog" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;align-items:center;justify-content:center">
+  <div style="background:#132643;padding:24px;border-radius:12px;width:420px;border:1px solid rgba(255,255,255,0.1)">
+    <h3 style="font-size:14px;margin-bottom:16px">新增比賽</h3>
+    <div class="field">
+      <label>運動類型（影響進球動畫 + 名單）</label>
+      <div style="display:flex;gap:6px">
+        <label class="sport-opt">
+          <input type="radio" name="ct-sport" value="football" checked onchange="refreshCreateDialogLists()">
+          <span>⚽ 足球</span>
+        </label>
+        <label class="sport-opt">
+          <input type="radio" name="ct-sport" value="basketball" onchange="refreshCreateDialogLists()">
+          <span>🏀 籃球</span>
+        </label>
+      </div>
+    </div>
+    <div class="field">
+      <label>主隊（從名單挑，或自行輸入）</label>
+      <input type="text" id="ct-home" list="ct-home-list" placeholder="輸入球隊名稱搜尋…" style="width:100%" autocomplete="off" oninput="showTeamInfo('home')">
+      <datalist id="ct-home-list"></datalist>
+      <div class="hint" id="ct-home-info">挑自名單會自動帶入該隊球員</div>
+    </div>
+    <div class="field">
+      <label>客隊</label>
+      <input type="text" id="ct-away" list="ct-away-list" placeholder="輸入球隊名稱搜尋…" style="width:100%" autocomplete="off" oninput="showTeamInfo('away')">
+      <datalist id="ct-away-list"></datalist>
+      <div class="hint" id="ct-away-info"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;justify-content:flex-end">
+      <button onclick="closeCreateDialog()">取消</button>
+      <button class="primary" onclick="doCreate()">建立</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// ── API helper ───────────────────────────────────────
+async function api(method, url, body) {
+  const opts = { method, headers: { 'Content-Type': 'application/json' } };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(url, opts);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+
+// ── 狀態 ─────────────────────────────────────────────
+let EVENT_TYPES = {};
+let matchList = [];
+let currentMatch = null;
+let selectedType = 'goal';
+const STATUS_ZH_BY_CODE = { upcoming: '未開賽', live: '進行中', halftime: '中場', finished: '已結束' };
+
+// 球員名單（來自 TheSportsDB，由 scripts/fetch-rosters.js 產生）
+let ROSTER = { football: [], basketball: [] };
+
+// ── 伺服器狀態指示 ───────────────────────────────────
+async function pollHealth() {
+  try {
+    const r = await fetch('/healthz');
+    if (r.ok) { $('server-dot').className = 'dot ok'; $('server-text').textContent = '已連線'; }
+    else throw 0;
+  } catch (_) {
+    $('server-dot').className = 'dot bad'; $('server-text').textContent = '無法連線';
+  }
+}
+setInterval(pollHealth, 5000);
+pollHealth();
+
+// ── 比賽列表 ─────────────────────────────────────────
+async function loadMatches() {
+  matchList = await api('GET', '/api/matches');
+  renderMatches();
+}
+function renderMatches() {
+  const container = $('match-list');
+  if (matchList.length === 0) {
+    container.innerHTML = '<div style="color:#556;font-size:11px;text-align:center;padding:20px">目前沒有比賽</div>';
+    return;
+  }
+  const statusLabel = { upcoming: '未開賽', live: '進行中', halftime: '中場', finished: '已結束' };
+  container.innerHTML = matchList.map(m => {
+    const sportIcon = m.sport === 'basketball' ? '🏀' : '⚽';
+    return `
+    <div class="match-item ${currentMatch?.id === m.id ? 'active' : ''}" onclick="selectMatch('${m.id}')">
+      <div class="teams">
+        <span style="margin-right:6px">${sportIcon}</span>
+        <span class="home-name">${escapeHtml(m.home.name)}</span>
+        <span class="vs">vs</span>
+        <span class="away-name">${escapeHtml(m.away.name)}</span>
+        <button class="mi-del" title="刪除這場比賽" onclick="deleteMatch('${m.id}', event)">🗑</button>
+      </div>
+      <div class="row2">
+        <span class="score">${m.homeScore} : ${m.awayScore}</span>
+        <span class="status-badge ${m.status}">${statusLabel[m.status] || m.status}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ── 新增比賽 dialog ──────────────────────────────────
+function openCreateDialog() {
+  $('create-dialog').style.display = 'flex';
+  // 清空上次輸入，重新載入名單
+  $('ct-home').value = '';
+  $('ct-away').value = '';
+  $('ct-home-info').textContent = '挑自名單會自動帶入該隊球員';
+  $('ct-away-info').textContent = '';
+  refreshCreateDialogLists();
+}
+function closeCreateDialog() { $('create-dialog').style.display = 'none'; }
+
+function getCreateSport() {
+  return document.querySelector('input[name="ct-sport"]:checked')?.value || 'football';
+}
+
+// 只更新 datalist 選項（不碰 info，避免跟 showTeamInfo 遞迴）
+function updateCreateDialogDatalists() {
+  const sport = getCreateSport();
+  const teams = ROSTER[sport] || [];
+  const opts = teams.map(t => `<option value="${escapeAttr(t.name)}">${escapeAttr(t.league || '')}</option>`).join('');
+  $('ct-home-list').innerHTML = opts;
+  $('ct-away-list').innerHTML = opts;
+}
+
+// 根據目前選的 sport，刷新主/客隊的 datalist 選項 + 重新評估資訊
+function refreshCreateDialogLists() {
+  updateCreateDialogDatalists();
+  showTeamInfo('home');
+  showTeamInfo('away');
+}
+
+// 輸入球隊時顯示聯賽名 + 球員數；若輸入的隊伍屬於「另一種運動」會自動切換 sport
+function showTeamInfo(which) {
+  const input = $('ct-' + which);
+  const info  = $('ct-' + which + '-info');
+  if (!input || !info) return;
+  const v = input.value.trim();
+  if (!v) { info.textContent = which === 'home' ? '挑自名單會自動帶入該隊球員' : ''; info.style.color = ''; return; }
+
+  const currentSport = getCreateSport();
+  let team = findRosterTeam(currentSport, v);
+  let foundSport = currentSport;
+
+  // 目前 sport 找不到 → 看另一種 sport 是否有
+  if (!team) {
+    const other = currentSport === 'football' ? 'basketball' : 'football';
+    const altTeam = findRosterTeam(other, v);
+    if (altTeam) {
+      team = altTeam;
+      foundSport = other;
+      // 自動切換 radio 與 datalist（不回呼 showTeamInfo 以免無限遞迴）
+      const radio = document.querySelector(`input[name="ct-sport"][value="${other}"]`);
+      if (radio) {
+        radio.checked = true;
+        updateCreateDialogDatalists();
+      }
+    }
+  }
+
+  if (team) {
+    const icon = foundSport === 'basketball' ? '🏀' : '⚽';
+    const switched = foundSport !== currentSport ? '（已自動切換運動類型）' : '';
+    info.textContent = `✓ ${icon} ${team.league} · ${team.players.length} 位球員 ${switched}`;
+    info.style.color = '#5ddf5d';
+  } else {
+    info.textContent = '（不在名單中，將以自訂隊伍建立）';
+    info.style.color = '#f5c542';
+  }
+}
+
+// 從 ROSTER 找球隊（大小寫不敏感）
+function findRosterTeam(sport, name) {
+  if (!name) return null;
+  const list = ROSTER[sport] || [];
+  const low = name.toLowerCase();
+  return list.find(t => t.name === name)
+      || list.find(t => t.name.toLowerCase() === low)
+      || null;
+}
+
+// 跨運動找球隊：回 { team, sport } 或 null
+function findTeamAcrossSports(name, preferSport) {
+  if (!name) return null;
+  const order = preferSport === 'basketball' ? ['basketball','football'] : ['football','basketball'];
+  for (const sp of order) {
+    const t = findRosterTeam(sp, name);
+    if (t) return { team: t, sport: sp };
+  }
+  return null;
+}
+
+async function doCreate() {
+  const radioSport = getCreateSport();
+  const homeName = $('ct-home').value.trim() || '主隊';
+  const awayName = $('ct-away').value.trim() || '客隊';
+
+  // 兩隊都跨運動搜尋，真正的 sport 由找到的隊伍決定（保證一致）
+  const homeHit = findTeamAcrossSports(homeName, radioSport);
+  const awayHit = findTeamAcrossSports(awayName, radioSport);
+
+  // 決定 sport：以主隊找到的為優先；若都沒有找到就用 radio 上的
+  const sport = homeHit?.sport || awayHit?.sport || radioSport;
+
+  const home = homeHit
+    ? { name: homeHit.team.name, teamId: homeHit.team.teamId, league: homeHit.team.league, logo: homeHit.team.logo }
+    : { name: homeName };
+  const away = awayHit
+    ? { name: awayHit.team.name, teamId: awayHit.team.teamId, league: awayHit.team.league, logo: awayHit.team.logo }
+    : { name: awayName };
+
+  const m = await api('POST', '/api/matches', { sport, home, away });
+  closeCreateDialog();
+  await loadMatches();
+  selectMatch(m.id);
+}
+
+// ── 刪除比賽 ──────────────────────────────────────
+async function deleteMatch(id, ev) {
+  if (ev) ev.stopPropagation();
+  const m = matchList.find(x => x.id === id);
+  const desc = m ? `${m.home.name} vs ${m.away.name}（${m.homeScore}:${m.awayScore}）` : id;
+  if (!confirm(`確定刪除比賽「${desc}」？\n所有事件與觀眾連線都會一起移除。`)) return;
+  await api('DELETE', '/api/match/' + id);
+  // 若刪的是目前選中那場，清空中間欄
+  if (currentMatch?.id === id) {
+    currentMatch = null;
+    $('center-empty').style.display = 'block';
+    $('center-main').style.display  = 'none';
+    $('preview-frame').src = 'about:blank';
+    $('embed-info').innerHTML = '<div class="hint">選擇比賽後會顯示嵌入用的代碼</div>';
+  }
+  await loadMatches();
+}
+
+// ── 選中比賽：載入 + 顯示 ────────────────────────────
+async function selectMatch(id) {
+  currentMatch = await api('GET', '/api/match/' + id);
+  renderMatches();
+  $('center-empty').style.display = 'none';
+  $('center-main').style.display = 'block';
+  renderCenter();
+  // 預覽 iframe 指向 widget
+  $('preview-frame').src = `widget.html?match=${id}`;
+  renderEmbedInfo(id);
+}
+
+async function refreshCurrentMatch() {
+  if (!currentMatch) return;
+  currentMatch = await api('GET', '/api/match/' + currentMatch.id);
+  renderCenter();
+  loadMatches();  // 更新左側比分
+}
+
+// ── 中欄：比分、狀態、事件 ───────────────────────────
+function renderCenter() {
+  const m = currentMatch;
+  if (!m) return;
+  renderScoreBoard(m);
+  // 事件表單只有在第一次或隊名改變時才重建；用戶輸入中絕對不動
+  ensureEventCreator(m);
+  renderEventList(m);
+}
+
+// 事件表單狀態管理：只渲染一次，之後只做局部更新
+let eventCreatorMatchId = null;
+let eventCreatorTeams = '';
+function ensureEventCreator(m) {
+  const teamsKey = (m.home?.name || '') + '||' + (m.away?.name || '') + '||' + (m.home?.teamId || '') + '||' + (m.away?.teamId || '');
+  if (eventCreatorMatchId !== m.id || eventCreatorTeams !== teamsKey) {
+    renderEventCreator(m);
+    populatePlayerList(m.sport || 'football', m);
+    eventCreatorMatchId = m.id;
+    eventCreatorTeams = teamsKey;
+  }
+}
+
+function renderScoreBoard(m) {
+  const board = $('score-board');
+  // 只有「真的在輸入文字」時（input/select/textarea）才保留 DOM；
+  // 按鈕被 focus 不算，否則點完 +1/-1 後 DOM 不會刷新、造成 admin 與 widget 不同步。
+  const ae = document.activeElement;
+  const isTyping = ae && board.contains(ae) &&
+    (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA');
+  if (isTyping) {
+    board.querySelectorAll('.status-row button').forEach(btn => {
+      btn.classList.toggle('active', btn.textContent.trim() === STATUS_ZH_BY_CODE[m.status]);
+    });
+    return;
+  }
+  const statusBtn = (s, label) => `<button class="small ${m.status === s ? 'active' : ''}" onclick="setStatus('${s}')">${label}</button>`;
+  board.innerHTML = `
+    <div class="teams">
+      <div class="side home">
+        <div class="name">
+          <input type="text" id="h-name" value="${escapeAttr(m.home.name)}" style="width:120px;text-align:center;color:var(--home);font-weight:700"
+                 onchange="updateTeamName('home', this.value)">
+        </div>
+        <div class="score-num">
+          <input type="number" min="0" id="h-score" value="${m.homeScore}" onchange="setScore('home', this.value)">
+        </div>
+        <div class="score-btns">
+          <button class="small" onclick="addScore('home', -1)">−1</button>
+          <button class="small primary" onclick="addScore('home', 1)">+1</button>
+        </div>
+      </div>
+      <div style="font-size: 22px; color: #556">VS</div>
+      <div class="side away">
+        <div class="name">
+          <input type="text" id="a-name" value="${escapeAttr(m.away.name)}" style="width:120px;text-align:center;color:var(--away);font-weight:700"
+                 onchange="updateTeamName('away', this.value)">
+        </div>
+        <div class="score-num">
+          <input type="number" min="0" id="a-score" value="${m.awayScore}" onchange="setScore('away', this.value)">
+        </div>
+        <div class="score-btns">
+          <button class="small" onclick="addScore('away', -1)">−1</button>
+          <button class="small primary" onclick="addScore('away', 1)">+1</button>
+        </div>
+      </div>
+    </div>
+    <div class="status-row">
+      ${statusBtn('upcoming', '未開賽')}
+      ${statusBtn('live',     '進行中')}
+      ${statusBtn('halftime', '中場')}
+      ${statusBtn('finished', '已結束')}
+    </div>
+  `;
+}
+
+async function updateTeamName(side, name) {
+  await api('PATCH', '/api/match/' + currentMatch.id, { [side]: { name } });
+  await refreshCurrentMatch();
+}
+async function setScore(side, val) {
+  const key = side === 'home' ? 'homeScore' : 'awayScore';
+  await api('PATCH', '/api/match/' + currentMatch.id, { [key]: val });
+  await refreshCurrentMatch();
+}
+async function addScore(side, delta) {
+  const cur = side === 'home' ? currentMatch.homeScore : currentMatch.awayScore;
+  await setScore(side, Math.max(0, cur + delta));
+}
+async function setStatus(s) {
+  await api('PATCH', '/api/match/' + currentMatch.id, { status: s });
+  await refreshCurrentMatch();
+}
+
+// ── 事件建立器 ──────────────────────────────────────
+function renderEventCreator(m) {
+  const box = $('event-creator');
+  const typeBtns = Object.entries(EVENT_TYPES).map(([k, v]) => `
+    <div class="type-btn ${selectedType === k ? 'active' : ''}" data-type="${k}" onclick="selectType('${k}')">
+      <span class="ico">${v.icon}</span>${v.label}
+    </div>
+  `).join('');
+  box.innerHTML = `
+    <div class="type-grid">${typeBtns}</div>
+    <div class="form-row">
+      <div>
+        <label>隊伍</label>
+        <select id="ev-team">
+          <option value="">—</option>
+          <option value="home">${escapeHtml(m.home.name)}（主）</option>
+          <option value="away">${escapeHtml(m.away.name)}（客）</option>
+        </select>
+      </div>
+      <div style="position:relative">
+        <label>球員（輸入過濾、方向鍵選擇）</label>
+        <input type="text" id="ev-player" list="ev-player-list" placeholder="例：#10 王小明 / 輸入姓氏搜尋" autocomplete="off">
+        <datalist id="ev-player-list"></datalist>
+        <div id="ev-player-hint" class="hint" style="position:absolute;left:0;right:0;top:100%;margin-top:2px;font-size:10px;color:#6a8"></div>
+      </div>
+      <div style="flex:0 0 70px">
+        <label>分</label>
+        <input type="number" id="ev-min" min="0" value="${m.minute || 0}" style="width:100%">
+      </div>
+      <div style="flex:0 0 70px">
+        <label>秒</label>
+        <input type="number" id="ev-sec" min="0" max="59" value="0" style="width:100%">
+      </div>
+    </div>
+    <div class="form-row">
+      <div>
+        <label>文字描述（可留空自動產生）</label>
+        <input type="text" id="ev-desc" placeholder="例：王小明禁區內勁射破門！" style="width:100%">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button class="primary" onclick="addAndPush()">＋ 建立並立即推送</button>
+      <button onclick="addOnly()">＋ 僅建立（稍後推送）</button>
+    </div>
+    <div class="hint">所有事件預設不會送到觀眾端，按「推送」按鈕才會。</div>
+  `;
+}
+function selectType(t) {
+  selectedType = t;
+  // 只切換按鈕 active 狀態，不重建表單避免清掉用戶輸入
+  document.querySelectorAll('#event-creator .type-btn').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-type') === t);
+  });
+}
+
+// 依當前比賽的主/客隊填球員 datalist；若 match 有綁 teamId 只列該兩隊，
+// 否則退回到整個 sport 所有球員
+function populatePlayerList(sport, match) {
+  const list = document.getElementById('ev-player-list');
+  if (!list) return;
+  const allTeams = (ROSTER[sport] || []);
+
+  let teams = [];
+  const homeId = match?.home?.teamId;
+  const awayId = match?.away?.teamId;
+  if (homeId || awayId) {
+    teams = allTeams.filter(t => t.teamId === homeId || t.teamId === awayId);
+  }
+  // 若沒有綁定（自訂隊伍）→ 退回所有隊伍，球員照列
+  if (teams.length === 0) teams = allTeams;
+
+  const opts = [];
+  for (const t of teams) {
+    for (const p of (t.players || [])) {
+      const label = `${t.name}${p.position ? ' · ' + p.position : ''}`;
+      const val = p.jersey ? `#${p.jersey} ${p.name}` : p.name;
+      opts.push(`<option value="${escapeAttr(val)}" label="${escapeAttr(label)}">${escapeHtml(label)}</option>`);
+    }
+  }
+  list.innerHTML = opts.join('');
+
+  // 綁定輸入框的「選到誰」提示
+  const input = document.getElementById('ev-player');
+  const hint  = document.getElementById('ev-player-hint');
+  if (input && hint && !input._hintBound) {
+    input._hintBound = true;
+    input.addEventListener('input', () => {
+      const v = input.value.trim();
+      if (!v) { hint.textContent = ''; return; }
+      // 找 exact match 的 option 顯示 team label
+      const opt = Array.from(list.options).find(o => o.value === v);
+      hint.textContent = opt ? '→ ' + (opt.getAttribute('label') || opt.textContent) : '';
+    });
+  }
+}
+
+function autoDesc(type, teamSide, player) {
+  const teamName = teamSide === 'home' ? currentMatch.home.name : teamSide === 'away' ? currentMatch.away.name : '';
+  const p = player || '';
+  switch (type) {
+    case 'goal':     return `${teamName} ${p} 進球！`;
+    case 'yellow':   return `${p || teamName} 被出示黃牌`;
+    case 'red':      return `${p || teamName} 被出示紅牌！`;
+    case 'corner':   return `${teamName} 獲得角球`;
+    case 'sub':      return `${teamName} 換人調整 ${p}`;
+    case 'injury':   return `${p || teamName} 受傷停賽`;
+    case 'var':      return `VAR 介入判定`;
+    case 'freekick': return `${teamName} 獲得自由球`;
+    case 'throwin':  return `${teamName} 邊線球`;
+    case 'kickoff':  return `比賽開始！`;
+    case 'halftime': return `上半場結束`;
+    case 'fulltime': return `全場比賽結束`;
+    case 'custom':   return p || '自訂訊息';
+    default:         return `${teamName} ${p}`.trim();
+  }
+}
+
+async function addOnly() { return _add(false); }
+async function addAndPush() { return _add(true); }
+async function _add(push) {
+  const type = selectedType;
+  const team = $('ev-team').value || null;
+  const player = $('ev-player').value.trim();
+  const minute = parseInt($('ev-min').value, 10) || 0;
+  const second = parseInt($('ev-sec').value, 10) || 0;
+  const desc = $('ev-desc').value.trim() || autoDesc(type, team, player);
+  const evt = await api('POST', `/api/match/${currentMatch.id}/events`, { type, team, player, minute, second, desc });
+  if (push) await api('POST', `/api/match/${currentMatch.id}/events/${evt.id}/push`);
+  // 清空
+  $('ev-player').value = '';
+  $('ev-desc').value = '';
+  await refreshCurrentMatch();
+}
+
+// ── 事件列表 ────────────────────────────────────────
+function renderEventList(m) {
+  const list = $('event-list');
+  if (m.events.length === 0) {
+    list.innerHTML = '<div style="color:#556;font-size:11px;text-align:center;padding:16px">尚未建立事件</div>';
+    return;
+  }
+  // 最新在上
+  const sorted = [...m.events].sort((a, b) =>
+    (b.minute - a.minute) || (b.second - a.second) || (b.createdAt - a.createdAt)
+  );
+  list.innerHTML = sorted.map(e => {
+    const t = `${e.minute}'${String(e.second || 0).padStart(2, '0')}"`;
+    const tmClass = e.team === 'home' ? 'tm-home' : e.team === 'away' ? 'tm-away' : '';
+    return `
+      <div class="event-item ${e.pushed ? 'pushed' : ''}">
+        <div class="t">${t}</div>
+        <div class="ico-big">${e.icon}</div>
+        <div class="desc ${tmClass}">${escapeHtml(e.desc)}</div>
+        <div class="actions">
+          ${e.pushed
+            ? `<button class="warn small" onclick="unpushEvent('${e.id}')">撤回</button>`
+            : `<button class="primary small" onclick="pushEvent('${e.id}')">推送</button>`}
+          <button class="danger small ghost" onclick="deleteEvent('${e.id}')">🗑</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+async function pushEvent(id)   { await api('POST',   `/api/match/${currentMatch.id}/events/${id}/push`);   await refreshCurrentMatch(); }
+async function unpushEvent(id) { await api('POST',   `/api/match/${currentMatch.id}/events/${id}/unpush`); await refreshCurrentMatch(); }
+async function deleteEvent(id) {
+  if (!confirm('刪除這個事件？')) return;
+  await api('DELETE', `/api/match/${currentMatch.id}/events/${id}`); await refreshCurrentMatch();
+}
+
+// ── 嵌入資訊 ────────────────────────────────────────
+function renderEmbedInfo(id) {
+  const origin = location.origin;
+  const embedSnippet =
+`<script src="${origin}/embed.js" data-match="${id}" data-position="bottom-right"><\/script>`;
+  const iframeSnippet =
+`<iframe src="${origin}/widget.html?match=${id}" width="280" height="420" frameborder="0" style="background:transparent"></iframe>`;
+  $('embed-info').innerHTML = `
+    <div class="hint">方法 1：一行嵌入（推薦）</div>
+    <div class="embed-block">
+      <button onclick="copyText(this, ${JSON.stringify(embedSnippet)})">複製</button>
+      ${escapeHtml(embedSnippet)}
+    </div>
+    <div class="hint" style="margin-top:10px">方法 2：iframe</div>
+    <div class="embed-block">
+      <button onclick="copyText(this, ${JSON.stringify(iframeSnippet)})">複製</button>
+      ${escapeHtml(iframeSnippet)}
+    </div>
+    <div class="hint">方法 3：直接開 <a href="widget.html?match=${id}" target="_blank" style="color:#9cf">widget 連結</a></div>
+  `;
+}
+function copyText(btn, txt) {
+  navigator.clipboard?.writeText(txt);
+  const prev = btn.textContent;
+  btn.textContent = '已複製';
+  setTimeout(() => btn.textContent = prev, 1200);
+}
+
+// ── 工具 ─────────────────────────────────────────────
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escapeAttr(s) { return escapeHtml(s); }
+
+// 載入球員名單
+async function loadRosters() {
+  try { ROSTER = await api('GET', '/api/rosters'); }
+  catch (_) { ROSTER = { football: [], basketball: [] }; }
+}
+
+// ── 啟動 ─────────────────────────────────────────────
+(async () => {
+  EVENT_TYPES = await api('GET', '/api/event-types');
+  await loadRosters();
+  await loadMatches();
+  // 若有比賽，預設開第一個
+  if (matchList.length > 0) selectMatch(matchList[0].id);
+  // 定期同步 (每 6 秒；若使用者正在輸入任何欄位則跳過此次，避免干擾)
+  setInterval(() => {
+    if (!currentMatch) return;
+    const ae = document.activeElement;
+    const isTyping = ae && (ae.tagName === 'INPUT' || ae.tagName === 'SELECT' || ae.tagName === 'TEXTAREA');
+    if (isTyping) return;
+    refreshCurrentMatch();
+  }, 6000);
+})();
+</script>
+</body>
+</html>

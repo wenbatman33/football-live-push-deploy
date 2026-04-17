@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>足球即時推播</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    color: #fff;
+    background: transparent;
+    overflow: hidden;
+  }
+
+  /* ── Widget 容器 ─────────────────────────────── */
+  #widget {
+    position: fixed;
+    left: 16px;
+    top: 16px;
+    width: 280px;
+    max-height: 460px;
+    background: rgba(13, 26, 48, 0.96);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 10px 32px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    transition: left 0.25s, top 0.25s, right 0.25s, width 0.25s, max-height 0.25s, border-radius 0.25s;
+  }
+  #widget.dragging { transition: none !important; }
+
+  .header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; font-size: 12px; font-weight: 600;
+    background: rgba(0,0,0,0.3); border-bottom: 1px solid rgba(255,255,255,0.06);
+    cursor: grab; user-select: none;
+  }
+  .header:active { cursor: grabbing; }
+  .title { flex: 1; text-align: center; letter-spacing: 1px; }
+  .icon-btn {
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 4px; font-size: 12px; color: #aac; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .icon-btn:hover { background: rgba(93,223,93,0.15); color: #fff; }
+  .icon-btn.active { background: rgba(93,223,93,0.25); color: #5ddf5d; border-color: rgba(93,223,93,0.4); }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #888;
+    box-shadow: 0 0 6px currentColor; flex-shrink: 0;
+  }
+  .dot.on  { background: #5ddf5d; color: #5ddf5d; }
+  .dot.off { background: #ff5555; color: #ff5555; }
+  .dock-btns { display: flex; gap: 4px; flex-shrink: 0; }
+
+  /* ── 比分版 ─────────────────────────────── */
+  .score {
+    padding: 12px 10px 10px;
+    text-align: center;
+    background: linear-gradient(180deg, rgba(91,163,245,0.05), rgba(245,166,35,0.05));
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .score .names {
+    display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px;
+    align-items: center; margin-bottom: 4px;
+    font-size: 13px; font-weight: 700;
+  }
+  .score .home { color: #5ba3f5; }
+  .score .away { color: #f5a623; }
+  .score .vs { color: #556; font-size: 10px; }
+  .score .nums {
+    font-size: 28px; font-weight: 800; letter-spacing: 3px; color: #fff;
+  }
+  .score .status {
+    display: inline-block; margin-top: 4px;
+    padding: 1px 8px; border-radius: 3px;
+    font-size: 10px; font-weight: 700; letter-spacing: 1px;
+  }
+  .status.upcoming { background: rgba(138,168,255,0.2); color: #8aa8ff; }
+  .status.live     { background: rgba(255,85,85,0.25); color: #ff9595; animation: pulse 1.6s infinite; }
+  .status.halftime { background: rgba(245,197,66,0.25); color: #f5c542; }
+  .status.finished { background: rgba(100,100,100,0.3); color: #aaa; }
+  @keyframes pulse { 50% { opacity: 0.5; } }
+
+  /* ── 事件列表 ─────────────────────────────── */
+  /* min-height:0 讓 flex:1 真的能縮小並讓 overflow-y:auto 生效，
+     否則多事件時會把 toast 擠出版面或覆蓋在事件上面 */
+  #events { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 8px 8px; }
+  #events::-webkit-scrollbar { width: 4px; }
+  #events::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 2px; }
+  .empty { color: #556; font-size: 11px; text-align: center; padding: 30px 8px; }
+
+  .evt {
+    margin: 4px 0; padding: 7px 8px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 6px;
+    border-left: 3px solid rgba(255,255,255,0.2);
+    animation: slide-in 0.3s ease-out;
+  }
+  .evt.goal     { border-left-color: #5ddf5d; background: rgba(93,223,93,0.1); }
+  .evt.yellow   { border-left-color: #f5c542; }
+  .evt.red      { border-left-color: #f55; }
+  .evt.sub      { border-left-color: #5ba3f5; }
+  .evt.corner   { border-left-color: #a085f5; }
+  .evt.kickoff, .evt.halftime, .evt.fulltime { border-left-color: #fff; background: rgba(255,255,255,0.08); }
+
+  .evt .top { display: flex; align-items: center; gap: 6px; font-size: 10px; }
+  .evt .t { color: #f5c542; font-weight: 700; }
+  .evt .ico { font-size: 13px; }
+  .evt .team-tag { font-size: 9px; padding: 1px 4px; border-radius: 3px; font-weight: 700; }
+  .evt .team-tag.home { background: rgba(91,163,245,0.25); color: #7cb5f5; }
+  .evt .team-tag.away { background: rgba(245,166,35,0.25); color: #f5c06a; }
+  .evt .desc { font-size: 12px; line-height: 1.35; margin-top: 3px; color: #e8ecf4; }
+
+  @keyframes slide-in {
+    from { transform: translateX(12px); opacity: 0; }
+    to   { transform: translateX(0); opacity: 1; }
+  }
+
+  /* ── Toast: 新事件進來時跳出大通知（flex 流內，不覆蓋事件列表） ─── */
+  #toast {
+    margin: 4px 8px 8px;
+    padding: 10px 12px; border-radius: 8px;
+    background: rgba(24, 60, 24, 0.95);
+    border: 1px solid rgba(93,223,93,0.55);
+    box-shadow: 0 6px 20px rgba(93,223,93,0.25);
+    font-size: 12px;
+    display: none;
+    flex-shrink: 0;
+    animation: toast-in 0.3s ease-out;
+  }
+  #toast.show { display: block; }
+  #toast .head { font-weight: 700; margin-bottom: 3px; font-size: 11px; color: #aeebae; }
+  #toast .body { line-height: 1.35; color: #fff; }
+  @keyframes toast-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  /* ── 收納態 ─────────────────────────────────────── */
+  #widget.docked-left,
+  #widget.docked-right {
+    top: 50%; transform: translateY(-50%); max-height: 70vh;
+  }
+  #widget.docked-left  { left: 0; right: auto; border-radius: 0 12px 12px 0; }
+  #widget.docked-right { right: 0; left: auto; border-radius: 12px 0 0 12px; }
+  #widget.collapsed { width: 40px !important; max-height: 220px; }
+  #widget.collapsed .header { flex-direction: column; padding: 8px 4px; gap: 6px; }
+  #widget.collapsed .title { writing-mode: vertical-rl; transform: rotate(180deg); font-size: 10px; }
+  #widget.collapsed .dock-btns { flex-direction: column; gap: 4px; }
+  #widget.collapsed .score, #widget.collapsed #events, #widget.collapsed #toast { display: none; }
+  #widget.collapsed .mini-score {
+    display: block; text-align: center; padding: 8px 2px; font-size: 11px; font-weight: 700;
+    border-top: 1px solid rgba(255,255,255,0.1);
+  }
+  .mini-score { display: none; }
+
+  /* ── Match missing 狀態 ──────────────────────────── */
+  .missing { padding: 30px 16px; text-align: center; color: #888; font-size: 12px; line-height: 1.6; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     燈箱動畫：進球 / 紅黃牌
+     ═══════════════════════════════════════════════════════════════ */
+  #lightbox {
+    position: absolute; inset: 0;
+    background: linear-gradient(180deg, #f6faff 0%, #e3ecf5 100%);
+    display: none;
+    align-items: center; justify-content: center;
+    flex-direction: column;
+    z-index: 100;
+    cursor: pointer;
+    animation: lb-fade 0.25s ease-out;
+  }
+  #lightbox.show { display: flex; }
+  .lb-close {
+    position: absolute; top: 8px; right: 10px;
+    width: 22px; height: 22px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.08); color: #333;
+    font-size: 12px; z-index: 2;
+    transition: background 0.15s;
+  }
+  .lb-close:hover { background: rgba(0,0,0,0.18); color: #000; }
+  .lb-content {
+    width: 100%; padding: 0 10px;
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+  }
+  @keyframes lb-fade {
+    from { opacity: 0; } to { opacity: 1; }
+  }
+
+  /* ── 共用：場景 SVG ── */
+  .scene-svg { width: 100%; max-width: 260px; height: auto; display: block; }
+
+  /* ── 共用：大標題文字（白底深色） ── */
+  .big-text {
+    font-size: 34px; font-weight: 900; letter-spacing: 3px;
+    color: #1b9e3a;
+    text-shadow: 0 2px 0 rgba(0,0,0,0.08), 0 4px 14px rgba(27,158,58,0.25);
+    animation: big-pop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) 0.9s both;
+  }
+  @keyframes big-pop {
+    0%   { transform: scale(0.2); opacity: 0; }
+    70%  { transform: scale(1.18); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ── 共用：時間/隊伍/球員（白底深色） ── */
+  .scene-meta {
+    text-align: center; animation: fade-up 0.4s ease-out 1.15s both;
+  }
+  .scene-meta .t-time   { color: #c48c00; font-weight: 700; font-size: 12px; }
+  .scene-meta .t-team   { margin-left: 6px; font-size: 13px; font-weight: 700; }
+  .scene-meta .t-player { font-size: 14px; color: #1a2744; font-weight: 700; margin-top: 2px; }
+  .scene-meta .t-desc   { font-size: 11px; color: #556; margin-top: 2px; max-width: 240px; line-height: 1.4; }
+  @keyframes fade-up {
+    from { transform: translateY(8px); opacity: 0; }
+    to   { transform: translateY(0); opacity: 1; }
+  }
+
+  /* ═══ 足球平面卡通風（2D ㄇ 字球門） ══════════════════ */
+  /* 球在草地上滾 → 進入球門網 */
+  .fg-ball-wrap {
+    animation: fg-ball-roll 1s cubic-bezier(0.45, 0.05, 0.6, 0.5) forwards;
+  }
+  @keyframes fg-ball-roll {
+    0%   { transform: translate(120px, 232px) rotate(0deg)   scale(1); }
+    50%  { transform: translate(165px, 210px) rotate(360deg) scale(0.95); }
+    82%  { transform: translate(200px, 165px) rotate(680deg) scale(0.88); }
+    100% { transform: translate(200px, 160px) rotate(720deg) scale(0.88); }
+  }
+  /* 球的影子：跟著 X 軸移動，Y 貼地面，進入球門後淡出 */
+  .fg-ball-shadow {
+    animation: fg-shadow-roll 1s cubic-bezier(0.45, 0.05, 0.6, 0.5) forwards;
+    transform-origin: center center;
+  }
+  @keyframes fg-shadow-roll {
+    0%   { transform: translate(120px, 245px) scale(1);   opacity: 0.25; }
+    50%  { transform: translate(165px, 230px) scale(0.9); opacity: 0.18; }
+    82%  { transform: translate(200px, 220px) scale(0.6); opacity: 0.08; }
+    100% { transform: translate(200px, 218px) scale(0.5); opacity: 0; }
+  }
+  /* 網子凸起回彈（球命中後） */
+  .fg-net-group {
+    transform-origin: 200px 160px;
+    animation: fg-net-bulge 0.55s ease-out 0.82s both;
+  }
+  @keyframes fg-net-bulge {
+    0%   { transform: scale(1); }
+    25%  { transform: scale(1.08, 1.1) translate(0, 2px); }
+    55%  { transform: scale(0.97, 0.96); }
+    100% { transform: scale(1); }
+  }
+  /* 光暈 */
+  .fg-glow {
+    animation: fg-glow 0.55s ease-out 0.82s both;
+    opacity: 0;
+  }
+  @keyframes fg-glow {
+    0%   { r: 2;  opacity: 0; }
+    40%  { r: 32; opacity: 1; }
+    100% { r: 55; opacity: 0; }
+  }
+  /* 火花 */
+  .fg-spark {
+    transform-origin: 200px 160px;
+    animation: fg-spark-fly 0.75s ease-out 0.82s both;
+    opacity: 0;
+  }
+  @keyframes fg-spark-fly {
+    0%   { transform: rotate(var(--ang)) translate(0,0) scale(0);    opacity: 1; }
+    30%  { opacity: 1; }
+    100% { transform: rotate(var(--ang)) translate(45px,0) scale(0); opacity: 0; }
+  }
+
+  /* ── 籃球：球弧線 + 落下 ── */
+  .bb-ball-wrap {
+    animation: bb-ball-arc 1.1s cubic-bezier(0.45, 0.05, 0.55, 0.95) forwards;
+  }
+  @keyframes bb-ball-arc {
+    0%   { transform: translate(18px, 215px) rotate(0); }
+    40%  { transform: translate(85px,  35px) rotate(420deg); }
+    65%  { transform: translate(140px, 95px) rotate(680deg); }
+    100% { transform: translate(140px, 230px) rotate(1020deg); }
+  }
+  /* ── 籃球：網子被推動 ── */
+  .bb-net {
+    transform-origin: 140px 125px;
+    animation: bb-net-sway 0.7s ease-out 0.75s both;
+  }
+  @keyframes bb-net-sway {
+    0%   { transform: scaleY(1)    scaleX(1); }
+    25%  { transform: scaleY(1.3)  scaleX(0.85); }
+    55%  { transform: scaleY(0.9)  scaleX(1.08); }
+    80%  { transform: scaleY(1.05) scaleX(0.97); }
+    100% { transform: scaleY(1)    scaleX(1); }
+  }
+  /* ── 籃球：籃框發光 ── */
+  .bb-rim-glow {
+    animation: bb-rim-flash 0.5s ease-out 0.7s both;
+    opacity: 0;
+  }
+  @keyframes bb-rim-flash {
+    0%   { opacity: 0;   stroke-width: 1; }
+    30%  { opacity: 1;   stroke-width: 5; }
+    100% { opacity: 0;   stroke-width: 1; }
+  }
+
+  /* ── 卡片：翻轉飛入 ── */
+  .card-scene {
+    transform-origin: 140px 100px;
+    animation: card-fly-in 0.75s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes card-fly-in {
+    0%   { transform: translate(150px, -160px) rotate(-45deg) scale(0.35); opacity: 0; }
+    55%  { transform: translate(0, 0) rotate(12deg) scale(1.15); opacity: 1; }
+    80%  { transform: translate(0, 0) rotate(-4deg) scale(0.98); opacity: 1; }
+    100% { transform: translate(0, 0) rotate(0) scale(1); opacity: 1; }
+  }
+  .card-rect {
+    stroke: rgba(255,255,255,0.2); stroke-width: 1;
+    filter: drop-shadow(0 8px 16px rgba(0,0,0,0.6));
+  }
+  .card-yellow .card-rect { fill: #f5c542; }
+  .card-red    .card-rect { fill: #ff4a4a; }
+</style>
+</head>
+<body>
+
+<div id="widget">
+  <div class="header" id="drag-handle">
+    <div class="dock-btns"><div class="icon-btn" id="btn-dock-left"  title="收到左側">⇤</div></div>
+    <span class="title">📡 LIVE</span>
+    <span id="status-dot" class="dot off" title="未連線"></span>
+    <div class="dock-btns"><div class="icon-btn" id="btn-dock-right" title="收到右側">⇥</div></div>
+  </div>
+
+  <div class="score" id="score-box">
+    <div class="names">
+      <span class="home" id="home-name">—</span>
+      <span class="vs">VS</span>
+      <span class="away" id="away-name">—</span>
+    </div>
+    <div class="nums"><span id="home-score">0</span> : <span id="away-score">0</span></div>
+    <div class="status upcoming" id="status-label">等待開賽</div>
+  </div>
+
+  <div id="events"><div class="empty">等待推送訊息…</div></div>
+
+  <div id="toast">
+    <div class="head" id="toast-head"></div>
+    <div class="body" id="toast-body"></div>
+  </div>
+
+  <div class="mini-score"><span id="mini-home">0</span>:<span id="mini-away">0</span></div>
+
+  <!-- 燈箱動畫：進球 / 紅黃牌 -->
+  <div id="lightbox">
+    <div class="lb-close" title="關閉">✕</div>
+    <div class="lb-content" id="lb-content"></div>
+  </div>
+</div>
+
+<script>
+// ================================================================
+// 觀眾端 widget
+// URL: widget.html?match=<id>[&ws=ws://host:port][&docked=left|right]
+// ================================================================
+const params = new URLSearchParams(location.search);
+const MATCH_ID = params.get('match');
+const WS_URL = params.get('ws') ||
+  ((location.protocol === 'https:' ? 'wss://' : 'ws://') +
+    location.host + '/ws?match=' + encodeURIComponent(MATCH_ID || ''));
+
+const $ = (id) => document.getElementById(id);
+
+// ── 缺 match 參數時就提示 ──
+if (!MATCH_ID) {
+  $('events').innerHTML = `<div class="missing">缺少 <code>?match=xxx</code> 參數<br>請從管理後台取得正確連結</div>`;
+  $('score-box').style.display = 'none';
+}
+
+// ── WS 連線 & 狀態 ─────────────────────────────────
+let ws = null, reconnectTimer = null;
+const statusDot = $('status-dot');
+let matchState = null;
+
+function setStatus(connected) {
+  statusDot.classList.toggle('on', connected);
+  statusDot.classList.toggle('off', !connected);
+  statusDot.title = connected ? '已連線' : '未連線';
+}
+
+function connect() {
+  if (!MATCH_ID) return;
+  try { ws = new WebSocket(WS_URL); } catch (_) { scheduleReconnect(); return; }
+  ws.onopen = () => { setStatus(true); if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; } };
+  ws.onmessage = (ev) => {
+    let msg; try { msg = JSON.parse(ev.data); } catch (_) { return; }
+    handleMessage(msg);
+  };
+  ws.onclose = () => { setStatus(false); scheduleReconnect(); };
+  ws.onerror = () => { try { ws.close(); } catch (_) {} };
+}
+function scheduleReconnect() {
+  if (reconnectTimer) return;
+  reconnectTimer = setTimeout(() => { reconnectTimer = null; connect(); }, 2000);
+}
+
+// 會觸發燈箱動畫的事件類型（進球 / 紅黃牌）
+const LIGHTBOX_TYPES = new Set(['goal', 'yellow', 'red']);
+
+// ── 訊息處理 ──────────────────────────────────────
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'match-state': {
+      matchState = msg.data;
+      renderMatch();
+      return;
+    }
+    case 'match-missing': {
+      $('events').innerHTML = `<div class="missing">找不到該場比賽<br><code>${escapeHtml(msg.data?.id || '')}</code><br>可能已被刪除</div>`;
+      $('score-box').style.display = 'none';
+      return;
+    }
+    case 'match-update': {
+      matchState = { ...matchState, ...msg.data };
+      renderMatch();
+      return;
+    }
+    case 'event': {
+      if (!matchState) matchState = msg.match || { events: [] };
+      else if (msg.match) matchState = { ...matchState, ...msg.match };
+      matchState.events = matchState.events || [];
+      if (!matchState.events.find(e => e.id === msg.data.id)) matchState.events.push(msg.data);
+      renderMatch();
+      // 進球/紅黃牌走燈箱動畫，其餘走小 toast
+      if (LIGHTBOX_TYPES.has(msg.data.type)) playLightbox(msg.data);
+      else                                    showToast(msg.data);
+      return;
+    }
+    case 'event-retracted': {
+      if (matchState?.events) matchState.events = matchState.events.filter(e => e.id !== msg.data.id);
+      renderMatch();
+      return;
+    }
+    case 'event-update': {
+      if (matchState?.events) {
+        const idx = matchState.events.findIndex(e => e.id === msg.data.id);
+        if (idx >= 0) matchState.events[idx] = msg.data;
+      }
+      renderMatch();
+      return;
+    }
+  }
+}
+
+// ── 渲染 ──────────────────────────────────────────
+const STATUS_LABEL = { upcoming: '等待開賽', live: '進行中', halftime: '中場', finished: '已結束' };
+
+function renderMatch() {
+  const m = matchState;
+  if (!m) return;
+  $('home-name').textContent  = m.home?.name  || '主隊';
+  $('away-name').textContent  = m.away?.name  || '客隊';
+  $('home-score').textContent = m.homeScore ?? 0;
+  $('away-score').textContent = m.awayScore ?? 0;
+  $('mini-home').textContent  = m.homeScore ?? 0;
+  $('mini-away').textContent  = m.awayScore ?? 0;
+  const lbl = $('status-label');
+  lbl.className = 'status ' + (m.status || 'upcoming');
+  lbl.textContent = STATUS_LABEL[m.status] || '—';
+
+  const evts = (m.events || []);
+  const events = $('events');
+  if (evts.length === 0) {
+    events.innerHTML = '<div class="empty">等待推送訊息…</div>';
+    return;
+  }
+  // 最新在上
+  const sorted = [...evts].sort((a, b) =>
+    (b.minute - a.minute) || (b.second - a.second) || ((b.pushedAt||0) - (a.pushedAt||0))
+  );
+  events.innerHTML = sorted.slice(0, 12).map(e => {
+    const t = `${e.minute}'${String(e.second || 0).padStart(2, '0')}"`;
+    const teamTag = e.team === 'home' ? `<span class="team-tag home">${escapeHtml(m.home?.name || '主')}</span>`
+                   : e.team === 'away' ? `<span class="team-tag away">${escapeHtml(m.away?.name || '客')}</span>`
+                   : '';
+    const clickable = LIGHTBOX_TYPES.has(e.type);
+    const style = clickable ? 'cursor:pointer' : '';
+    const replayHint = clickable ? '<span style="font-size:9px;color:#5ddf5d;margin-left:auto">▶</span>' : '';
+    return `<div class="evt ${e.type}" data-event-id="${e.id}" style="${style}">
+      <div class="top"><span class="t">${t}</span><span class="ico">${e.icon || ''}</span>${teamTag}${replayHint}</div>
+      <div class="desc">${escapeHtml(e.desc || '')}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Toast 通知（新 push 跳出大字） ─────────────
+let toastTimer = null;
+function showToast(evt) {
+  if (!evt) return;
+  const m = matchState || {};
+  const team = evt.team === 'home' ? m.home?.name : evt.team === 'away' ? m.away?.name : '';
+  const head = `${evt.icon || '📣'} ${evt.minute}'${String(evt.second||0).padStart(2,'0')}"  ${team || ''}`;
+  $('toast-head').textContent = head;
+  $('toast-body').textContent = evt.desc || '';
+  const toast = $('toast');
+  toast.classList.add('show');
+  if (toastTimer) clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.remove('show'), 4500);
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ═══════════════════════════════════════════════════
+// 燈箱動畫
+// ═══════════════════════════════════════════════════
+let lightboxTimer = null;
+const lightbox   = $('lightbox');
+const lbContent  = $('lb-content');
+
+function playLightbox(evt) {
+  if (!evt || !lightbox || !lbContent) return;
+  const m = matchState || {};
+  const sport = m.sport || 'football';
+  let html = '';
+  if (evt.type === 'goal') {
+    html = sport === 'basketball' ? renderGoalBasketball(evt, m) : renderGoalFootball(evt, m);
+  } else if (evt.type === 'yellow' || evt.type === 'red') {
+    html = renderCard(evt, m, evt.type);
+  } else return;
+
+  lbContent.innerHTML = html;
+  // 重啟 CSS animation：先移除 class 再下一個 frame 加回來
+  lightbox.classList.remove('show');
+  void lightbox.offsetWidth;
+  lightbox.classList.add('show');
+
+  clearTimeout(lightboxTimer);
+  const duration = evt.type === 'goal' ? 4000 : 3200;
+  lightboxTimer = setTimeout(closeLightbox, duration);
+}
+
+function closeLightbox() {
+  lightbox.classList.remove('show');
+  clearTimeout(lightboxTimer);
+  lbContent.innerHTML = '';  // 移除 DOM 讓 SVG 動畫下次重播
+}
+
+// 點擊空白 / 關閉鈕 都可以提早結束
+lightbox.addEventListener('click', (e) => {
+  if (e.target === lightbox || e.target.classList.contains('lb-close')) {
+    closeLightbox();
+  }
+});
+
+// 點事件列表裡的 goal/yellow/red item → 重播燈箱
+$('events').addEventListener('click', (e) => {
+  const item = e.target.closest('.evt[data-event-id]');
+  if (!item) return;
+  const id = item.getAttribute('data-event-id');
+  const ev = matchState?.events?.find(x => x.id === id);
+  if (ev && LIGHTBOX_TYPES.has(ev.type)) playLightbox(ev);
+});
+
+// ── 共用：meta 資訊區塊 ─────────────────────────
+function sceneMetaHtml(evt, m) {
+  const teamInfo  = evt.team === 'home' ? m.home : evt.team === 'away' ? m.away : null;
+  const teamName  = teamInfo?.name  || '';
+  const teamColor = teamInfo?.color || '#fff';
+  const t = `${evt.minute}'${String(evt.second || 0).padStart(2, '0')}"`;
+  return `
+    <div class="scene-meta">
+      <div>
+        <span class="t-time">${t}</span>
+        <span class="t-team" style="color:${teamColor}">${escapeHtml(teamName)}</span>
+      </div>
+      ${evt.player ? `<div class="t-player">${escapeHtml(evt.player)}</div>` : ''}
+      ${evt.desc && evt.desc !== evt.player ? `<div class="t-desc">${escapeHtml(evt.desc)}</div>` : ''}
+    </div>`;
+}
+
+// ═══════════════════════════════════════════════════
+// 場景：足球進球（球飛入 → 網子凸起 → 火花 → GOAL）
+// ═══════════════════════════════════════════════════
+function renderGoalFootball(evt, m) {
+  // 12 道火花（命中點：200, 160）
+  const sparks = Array.from({length: 12}, (_, i) =>
+    `<circle class="fg-spark" cx="200" cy="160" r="2.6" fill="#ffde4d" style="--ang:${i * 30}deg"/>`
+  ).join('');
+
+  // 四角草叢
+  const tuft = (x, y) => `
+    <g transform="translate(${x} ${y})">
+      <path d="M 0 0 L 0 -9" stroke="#3c8a2a" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M -4 0 L -5 -7" stroke="#3c8a2a" stroke-width="1.6" stroke-linecap="round"/>
+      <path d="M 4 0 L 5 -7"   stroke="#3c8a2a" stroke-width="1.6" stroke-linecap="round"/>
+    </g>`;
+
+  return `
+    <svg class="scene-svg" viewBox="0 0 400 280">
+      <defs>
+        <!-- 草皮漸層 -->
+        <linearGradient id="fg-grass2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0"   stop-color="#a9e85e"/>
+          <stop offset="1"   stop-color="#78c740"/>
+        </linearGradient>
+        <!-- 網子菱形 pattern -->
+        <pattern id="fg-net2" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(8)">
+          <path d="M 0 7 L 7 0 L 14 7 L 7 14 Z"
+                fill="none" stroke="#1a1a1a" stroke-width="0.9" stroke-opacity="0.85"/>
+        </pattern>
+        <!-- 球光澤 -->
+        <radialGradient id="fg-ball-grad" cx="0.35" cy="0.3" r="0.75">
+          <stop offset="0"    stop-color="#ffffff"/>
+          <stop offset="0.88" stop-color="#f4f4f4"/>
+          <stop offset="1"    stop-color="#c8c8c8"/>
+        </radialGradient>
+      </defs>
+
+      <!-- 🟩 草皮：輕微傾斜的圓角橢圓，乾淨簡潔 -->
+      <g transform="rotate(-4 210 195)">
+        <ellipse cx="210" cy="195" rx="170" ry="55" fill="url(#fg-grass2)"/>
+      </g>
+
+      <!-- 四角草叢（貼在草皮邊上） -->
+      ${tuft(62, 208)}
+      ${tuft(358, 188)}
+      ${tuft(100, 148)}
+      ${tuft(325, 154)}
+
+      <!-- 🥅 球門網面：單一網片 -->
+      <g class="fg-net-group">
+        <rect x="108" y="110" width="190" height="108" fill="url(#fg-net2)"/>
+      </g>
+
+      <!-- 🥅 球門框：ㄇ 字形（圓角頂） -->
+      <g stroke="#1f1f1f" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 105 220
+                 L 105 135
+                 Q 105 105 135 105
+                 L 265 105
+                 Q 295 105 295 135
+                 L 295 220"/>
+      </g>
+
+      <!-- 💡 命中光暈（命中點：200, 160） -->
+      <circle class="fg-glow" cx="200" cy="160" r="2" fill="rgba(255,240,180,0.9)"/>
+
+      <!-- ✨ 火花 -->
+      <g>${sparks}</g>
+
+      <!-- 🌑 球的影子（貼在地面） -->
+      <g class="fg-ball-shadow">
+        <ellipse cx="0" cy="0" rx="18" ry="4" fill="rgba(0,0,0,1)"/>
+      </g>
+
+      <!-- ⚽ 球（五邊形經典配色） -->
+      <g class="fg-ball-wrap">
+        <circle cx="0" cy="0" r="16" fill="url(#fg-ball-grad)" stroke="#222" stroke-width="0.6"/>
+        <!-- 中央大五邊形 -->
+        <polygon points="0,-8.5 8.1,-2.6 5,7.2 -5,7.2 -8.1,-2.6" fill="#1f1f1f"/>
+        <!-- 周圍 5 段黑邊連到周邊五邊形 -->
+        <g stroke="#1f1f1f" stroke-width="1.2" fill="none" stroke-linecap="round">
+          <path d="M 0 -8.5 L 0 -14"/>
+          <path d="M 8.1 -2.6 L 13.5 -4.4"/>
+          <path d="M -8.1 -2.6 L -13.5 -4.4"/>
+          <path d="M 5 7.2 L 8.5 12.7"/>
+          <path d="M -5 7.2 L -8.5 12.7"/>
+        </g>
+      </g>
+    </svg>
+    <div class="big-text">GOAL!</div>
+    ${sceneMetaHtml(evt, m)}
+  `;
+}
+
+// ═══════════════════════════════════════════════════
+// 場景：籃球得分（球弧線 → 穿過籃框 → 網晃動 → SCORE）
+// ═══════════════════════════════════════════════════
+function renderGoalBasketball(evt, m) {
+  // 籃網：雙向對稱的 X 交叉，從籃框頂往下收斂到網底
+  const strandPaths = [];
+  for (let i = 0; i < 6; i++) {
+    // 右斜紋：左上 → 右下
+    const topL = 112 + i * 10;
+    const botL = 130 + i * 4;
+    strandPaths.push(`<path d="M ${topL} 115 Q ${(topL + botL) / 2} 140 ${botL} 160" stroke="#6a7480" stroke-width="1.2" fill="none"/>`);
+    // 左斜紋：右上 → 左下（鏡像）
+    const topR = 168 - i * 10;
+    const botR = 150 - i * 4;
+    strandPaths.push(`<path d="M ${topR} 115 Q ${(topR + botR) / 2} 140 ${botR} 160" stroke="#6a7480" stroke-width="1.2" fill="none"/>`);
+  }
+  const netLines = strandPaths.join('');
+  const netHoops = `
+    <path d="M 115 128 L 165 128 M 120 143 L 160 143 M 125 158 L 155 158"
+          stroke="#8a94a0" stroke-width="1" fill="none"/>
+  `;
+
+  return `
+    <svg class="scene-svg" viewBox="0 0 280 240">
+      <defs>
+        <radialGradient id="bb-ball-grad" cx="0.35" cy="0.35" r="0.7">
+          <stop offset="0" stop-color="#f89c42"/>
+          <stop offset="1" stop-color="#a03e12"/>
+        </radialGradient>
+        <linearGradient id="bb-floor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#e8bc7a"/>
+          <stop offset="1" stop-color="#b88048"/>
+        </linearGradient>
+      </defs>
+
+      <!-- 🪵 木地板：輕微傾斜的圓角橢圓（更大版） -->
+      <g transform="rotate(-3 140 214)">
+        <ellipse cx="140" cy="214" rx="165" ry="30" fill="url(#bb-floor)"/>
+        <!-- 木紋橫線 -->
+        <g stroke="rgba(90,50,20,0.3)" stroke-width="0.7" fill="none" stroke-linecap="round">
+          <line x1="-5"  y1="198" x2="285" y2="198"/>
+          <line x1="10"  y1="210" x2="270" y2="210"/>
+          <line x1="0"   y1="222" x2="280" y2="222"/>
+          <line x1="15"  y1="234" x2="265" y2="234"/>
+        </g>
+      </g>
+
+      <!-- 籃板 -->
+      <g>
+        <rect x="90" y="25" width="100" height="68" fill="#fafafa"
+              stroke="#d84a10" stroke-width="3" rx="3"/>
+        <rect x="122" y="52" width="36" height="28" fill="none"
+              stroke="#d84a10" stroke-width="2.5" rx="2"/>
+        <!-- 籃板連桿 -->
+        <rect x="132" y="90" width="16" height="14" fill="#8a96a6"/>
+      </g>
+
+      <!-- 網子（有晃動動畫） -->
+      <g class="bb-net">
+        ${netLines}
+        ${netHoops}
+      </g>
+
+      <!-- 籃框 -->
+      <ellipse cx="140" cy="113" rx="30" ry="5"
+               fill="none" stroke="#ff6820" stroke-width="3.5"/>
+      <!-- 籃框閃光 -->
+      <ellipse class="bb-rim-glow" cx="140" cy="113" rx="30" ry="5"
+               fill="none" stroke="#ffd24a" stroke-width="3.5"/>
+
+      <!-- 球 -->
+      <g class="bb-ball-wrap">
+        <circle cx="0" cy="0" r="13" fill="url(#bb-ball-grad)"/>
+        <!-- 籃球分線 -->
+        <g stroke="#3a1a0a" stroke-width="0.9" fill="none">
+          <path d="M -13 0 Q 0 -6 13 0"/>
+          <path d="M -13 0 Q 0 6 13 0"/>
+          <line x1="0" y1="-13" x2="0" y2="13"/>
+        </g>
+      </g>
+    </svg>
+    <div class="big-text" style="color:#e87820;text-shadow:0 2px 0 rgba(0,0,0,0.08), 0 4px 14px rgba(232,120,32,0.25)">SCORE!</div>
+    ${sceneMetaHtml(evt, m)}
+  `;
+}
+
+// ═══════════════════════════════════════════════════
+// 場景：紅/黃牌（卡片翻轉飛入）
+// ═══════════════════════════════════════════════════
+function renderCard(evt, m, type) {
+  const isRed = type === 'red';
+  const title = isRed ? 'RED CARD' : 'YELLOW CARD';
+  const zhTitle = isRed ? '紅牌' : '黃牌';
+  const color = isRed ? '#ff4a4a' : '#f5c542';
+  const cls = isRed ? 'card-red' : 'card-yellow';
+
+  return `
+    <svg class="scene-svg" viewBox="0 0 280 200">
+      <g class="card-scene ${cls}">
+        <!-- 卡片本體 -->
+        <rect class="card-rect" x="100" y="40" width="80" height="120" rx="6"/>
+        <!-- 卡片內陰影讓它更立體 -->
+        <rect x="104" y="44" width="72" height="112" rx="4" fill="none"
+              stroke="rgba(0,0,0,0.18)" stroke-width="1.5"/>
+      </g>
+    </svg>
+    <div class="big-text" style="font-size:22px;color:${color};text-shadow:0 3px 12px ${color}99;letter-spacing:2px">
+      ${zhTitle} · ${title}
+    </div>
+    ${sceneMetaHtml(evt, m)}
+  `;
+}
+
+// ── 拖動 + 收納（與先前 widget 同概念） ──────────────
+const STATE_KEY = 'flp-widget-ui-' + (MATCH_ID || 'default');
+const widget = $('widget');
+const handle = $('drag-handle');
+
+const initialDock = params.get('docked'); // 允許 URL 指定初始位置，e.g. ?docked=right
+let ui = loadUi() || (initialDock === 'left' || initialDock === 'right'
+  ? { mode: initialDock, collapsed: true, left: 16, top: 16 }
+  : { mode: 'free', collapsed: false, left: 16, top: 16 });
+applyUi();
+
+function loadUi() { try { return JSON.parse(localStorage.getItem(STATE_KEY) || 'null'); } catch (_) { return null; } }
+function saveUi() { try { localStorage.setItem(STATE_KEY, JSON.stringify(ui)); } catch (_) {} }
+function applyUi() {
+  widget.classList.remove('docked-left','docked-right','collapsed');
+  if (ui.mode === 'free') {
+    widget.style.left  = ui.left + 'px';
+    widget.style.top   = ui.top  + 'px';
+    widget.style.right = 'auto';
+    widget.style.transform = 'none';
+  } else if (ui.mode === 'left') {
+    widget.classList.add('docked-left');
+    widget.style.left = widget.style.right = widget.style.top = '';
+    widget.style.transform = '';
+  } else if (ui.mode === 'right') {
+    widget.classList.add('docked-right');
+    widget.style.left = widget.style.right = widget.style.top = '';
+    widget.style.transform = '';
+  }
+  if (ui.collapsed && ui.mode !== 'free') widget.classList.add('collapsed');
+  $('btn-dock-left').classList.toggle('active',  ui.mode === 'left');
+  $('btn-dock-right').classList.toggle('active', ui.mode === 'right');
+}
+
+let dragging = false, dragStart = null, dragMoved = false;
+function onPointerDown(e) {
+  if (e.target.closest('.icon-btn')) return;
+  if (ui.mode !== 'free') {
+    const rect = widget.getBoundingClientRect();
+    ui.mode = 'free'; ui.collapsed = false;
+    ui.left = rect.left; ui.top = rect.top;
+    applyUi();
+  }
+  dragging = true; dragMoved = false;
+  const rect = widget.getBoundingClientRect();
+  const p = e.touches ? e.touches[0] : e;
+  dragStart = { x: p.clientX, y: p.clientY, sl: rect.left, st: rect.top };
+  widget.classList.add('dragging');
+  e.preventDefault();
+}
+function onPointerMove(e) {
+  if (!dragging) return;
+  const p = e.touches ? e.touches[0] : e;
+  const dx = p.clientX - dragStart.x, dy = p.clientY - dragStart.y;
+  if (Math.abs(dx) > 2 || Math.abs(dy) > 2) dragMoved = true;
+  let nl = dragStart.sl + dx, nt = dragStart.st + dy;
+  const w = widget.offsetWidth, vw = window.innerWidth, vh = window.innerHeight;
+  nl = Math.max(-w + 40, Math.min(vw - 40, nl));
+  nt = Math.max(0, Math.min(vh - 40, nt));
+  ui.left = nl; ui.top = nt;
+  widget.style.left = nl + 'px'; widget.style.top = nt + 'px';
+}
+function onPointerUp() {
+  if (!dragging) return;
+  dragging = false; widget.classList.remove('dragging');
+  if (dragMoved) {
+    const rect = widget.getBoundingClientRect();
+    if (rect.left <= 12) { ui.mode = 'left'; ui.collapsed = true; applyUi(); saveUi(); return; }
+    if (window.innerWidth - rect.right <= 12) { ui.mode = 'right'; ui.collapsed = true; applyUi(); saveUi(); return; }
+    saveUi();
+  }
+}
+handle.addEventListener('mousedown',  onPointerDown);
+handle.addEventListener('touchstart', onPointerDown, { passive: false });
+document.addEventListener('mousemove',  onPointerMove);
+document.addEventListener('touchmove',  onPointerMove, { passive: false });
+document.addEventListener('mouseup',    onPointerUp);
+document.addEventListener('touchend',   onPointerUp);
+
+$('btn-dock-left').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (ui.mode === 'left') ui.collapsed = !ui.collapsed;
+  else { ui.mode = 'left'; ui.collapsed = true; }
+  applyUi(); saveUi();
+});
+$('btn-dock-right').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (ui.mode === 'right') ui.collapsed = !ui.collapsed;
+  else { ui.mode = 'right'; ui.collapsed = true; }
+  applyUi(); saveUi();
+});
+widget.addEventListener('click', (e) => {
+  if (!widget.classList.contains('collapsed')) return;
+  if (e.target.closest('.icon-btn')) return;
+  ui.collapsed = false; applyUi(); saveUi();
+});
+window.addEventListener('resize', () => {
+  if (ui.mode !== 'free') return;
+  const w = widget.offsetWidth;
+  ui.left = Math.max(-w + 40, Math.min(window.innerWidth - 40, ui.left));
+  ui.top  = Math.max(0, Math.min(window.innerHeight - 40, ui.top));
+  applyUi();
+});
+
+connect();
+</script>
+</body>
+</html>

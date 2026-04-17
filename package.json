@@ -1,0 +1,15 @@
+{
+  "name": "football-live-push",
+  "version": "1.0.0",
+  "description": "Manual-push football/basketball live ticker with embeddable widget (zero dependencies)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "glitch": {
+    "projectType": "node"
+  }
+}

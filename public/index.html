@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>足球即時推播系統</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: linear-gradient(135deg, #0a1628 0%, #132643 100%);
+    color: #e8ecf4;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: rgba(13,26,48,0.85);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 40px;
+    max-width: 640px; width: 100%;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    backdrop-filter: blur(20px);
+  }
+  h1 { font-size: 26px; margin-bottom: 8px; letter-spacing: 1px; }
+  .sub { color: #8a9; font-size: 13px; margin-bottom: 30px; line-height: 1.6; }
+  .links { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .link {
+    display: block; padding: 18px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    text-decoration: none; color: inherit;
+    transition: all 0.2s;
+  }
+  .link:hover {
+    background: rgba(93,223,93,0.08);
+    border-color: rgba(93,223,93,0.4);
+    transform: translateY(-2px);
+  }
+  .link .ico { font-size: 28px; display: block; margin-bottom: 8px; }
+  .link .t { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+  .link .d { font-size: 11px; color: #8a9; line-height: 1.4; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px;
+    background: rgba(93,223,93,0.2); color: #5ddf5d;
+    border-radius: 3px; font-size: 11px; font-weight: 600;
+    margin-left: 6px;
+  }
+
+  .quick {
+    margin-top: 24px; padding-top: 24px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    font-size: 12px; color: #8a9;
+  }
+  code { background: rgba(0,0,0,0.3); padding: 1px 6px; border-radius: 3px; color: #9cf; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <h1>⚽ 足球即時推播系統 <span class="badge">Live</span></h1>
+  <div class="sub">
+    操作員在管理後台建立比賽、推送訊息；觀眾透過 widget 接收即時通知。<br>
+    所有事件需手動按「推送」才會送到觀眾端。
+  </div>
+
+  <div class="links">
+    <a class="link" href="admin.html">
+      <span class="ico">🎛</span>
+      <div class="t">管理後台</div>
+      <div class="d">建立比賽、編輯事件、手動推送</div>
+    </a>
+    <a class="link" href="demo-host.html">
+      <span class="ico">🖥</span>
+      <div class="t">觀眾端示範</div>
+      <div class="d">看看 widget 嵌入在第三方頁面的樣子</div>
+    </a>
+  </div>
+
+  <div class="quick">
+    <div style="margin-bottom: 8px; color: #aac; font-weight: 600;">嵌入到你自己的網站</div>
+    <code>&lt;script src="/embed.js" data-match="比賽ID"&gt;&lt;/script&gt;</code>
+    <div style="margin-top: 8px">在管理後台選中比賽後，右側面板會顯示完整嵌入代碼可直接複製。</div>
+  </div>
+</div>
+
+</body>
+</html>

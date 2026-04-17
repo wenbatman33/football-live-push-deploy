@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>示範站台 · 體育新聞頁</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #fafafa; color: #222;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang TC', sans-serif;
+    line-height: 1.65;
+  }
+  .top {
+    background: #0a4da2; color: #fff; padding: 14px 20px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .top .logo { font-size: 18px; font-weight: 800; letter-spacing: 1px; }
+  .top nav { display: flex; gap: 18px; font-size: 13px; margin-left: auto; }
+  .top nav a { color: rgba(255,255,255,0.85); text-decoration: none; }
+  .top nav a:hover { color: #fff; }
+
+  .container { max-width: 760px; margin: 0 auto; padding: 30px 20px 60px; }
+  .breadcrumb { font-size: 12px; color: #888; margin-bottom: 12px; }
+  .breadcrumb a { color: #0a4da2; text-decoration: none; }
+  h1.title { font-size: 28px; line-height: 1.3; color: #111; margin-bottom: 10px; }
+  .meta {
+    font-size: 12px; color: #888;
+    padding-bottom: 14px; border-bottom: 1px solid #eee;
+    display: flex; gap: 14px; margin-bottom: 18px;
+  }
+  .meta .author { color: #0a4da2; font-weight: 600; }
+
+  .hero {
+    aspect-ratio: 16/9; background: linear-gradient(135deg, #0a4da2, #2574d4);
+    border-radius: 8px; margin-bottom: 20px;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255,255,255,0.7); font-size: 14px;
+  }
+
+  .article p { margin-bottom: 16px; font-size: 16px; color: #333; }
+  .article h2 {
+    margin-top: 28px; margin-bottom: 10px;
+    font-size: 20px; color: #111;
+    padding-left: 10px; border-left: 4px solid #0a4da2;
+  }
+  .article .quote {
+    padding: 12px 16px; background: #f0f5fb;
+    border-left: 4px solid #0a4da2;
+    margin: 16px 0; font-style: italic; color: #444;
+  }
+  .tag-row { margin-top: 30px; padding-top: 16px; border-top: 1px solid #eee; font-size: 12px; color: #888; }
+  .tag { display: inline-block; padding: 3px 10px; background: #f0f5fb; border-radius: 3px; color: #0a4da2; margin-right: 6px; }
+
+  .note {
+    margin: 20px 0 24px; padding: 14px 16px;
+    background: #fff8e1; border: 1px solid #ffe49a; border-radius: 8px;
+    font-size: 13px; color: #665;
+  }
+  .note strong { color: #555; }
+  .note code { background: #fff; padding: 1px 6px; border-radius: 3px; color: #a64; font-size: 12px; }
+
+  #match-selector {
+    margin: 8px 0 4px; padding: 6px 10px;
+    border: 1px solid #ccc; border-radius: 6px; font-size: 13px;
+  }
+  #match-selector-label { font-size: 12px; color: #555; }
+
+  footer { text-align: center; padding: 24px; color: #aaa; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="top">
+  <div class="logo">🏆 球迷頭條</div>
+  <nav>
+    <a href="#">首頁</a>
+    <a href="#">戰況</a>
+    <a href="#">數據</a>
+    <a href="#">轉會</a>
+  </nav>
+</div>
+
+<div class="container">
+  <div class="breadcrumb"><a href="#">首頁</a> › <a href="#">歐冠聯賽</a> › 本篇報導</div>
+  <h1 class="title">本季焦點戰一觸即發　主客兩隊正處火熱交鋒之時</h1>
+  <div class="meta">
+    <span class="author">本站記者</span>
+    <span>2026-04-17</span>
+    <span>閱讀 3,248 次</span>
+  </div>
+
+  <div class="hero">（這是一則示範新聞頁，右下角 widget 即時更新推播訊息）</div>
+
+  <div class="note">
+    <strong>💡 示範說明：</strong>
+    這個頁面模擬第三方站台。右下角的浮動小工具是用一行 <code>&lt;script src="/embed.js" data-match="..."&gt;</code> 嵌入的。
+    請同時打開 <a href="admin.html" target="_blank">管理後台</a>，選一場比賽並按「推送」任一事件，這裡會即時看到通知。
+  </div>
+
+  <div id="match-selector-label">切換比賽 ID（自動載入後台已建立的場次）：</div>
+  <select id="match-selector" onchange="switchMatch(this.value)"></select>
+
+  <div class="article">
+    <p>本季聯賽進入關鍵階段，雙方主帥皆派出最強陣容迎戰。開場以來兩隊交替掌控節奏，中場球員搶斷與推進展現極高水準。</p>
+
+    <h2>上半場戰況</h2>
+    <p>主隊率先透過邊路快攻製造威脅，幾次突破製造了角球與禁區邊緣的射門機會。客隊後衛線雖承受巨大壓力，但門將多次精彩撲救讓場上始終無人破關。</p>
+    <div class="quote">
+      「我們今天在體能與戰術紀律上都做到極致，接下來要做的就是把握住那一瞬間的機會。」—— 主隊教練賽前表示
+    </div>
+
+    <h2>下半場焦點</h2>
+    <p>易邊再戰後，客隊加強了中場壓迫，整體逼搶提升，幾次反擊打出速度。場上節奏明顯加快，雙方都不願滿足於和局。接下來二十分鐘將是決定勝負的關鍵時段。</p>
+    <p>球迷屏息以待，場邊氣氛沸騰。無論結果如何，這將是載入本季史冊的一戰。</p>
+
+    <div class="tag-row">
+      <span class="tag">歐冠</span>
+      <span class="tag">焦點戰</span>
+      <span class="tag">戰術分析</span>
+    </div>
+  </div>
+</div>
+
+<footer>© 球迷頭條 · 示範用途</footer>
+
+<script>
+// 載入目前 server 上有哪些比賽，讓示範頁可以切換
+(async function loadList() {
+  const sel = document.getElementById('match-selector');
+  try {
+    const r = await fetch('/api/matches');
+    const list = await r.json();
+    if (list.length === 0) {
+      sel.innerHTML = '<option value="">尚未建立任何比賽（請先到管理後台）</option>';
+      return;
+    }
+    sel.innerHTML = list.map(m =>
+      `<option value="${m.id}">${m.home.name} ${m.homeScore}:${m.awayScore} ${m.away.name}</option>`
+    ).join('');
+    // 讀取 URL ?match= 或自動選第一個
+    const qs = new URLSearchParams(location.search);
+    const wanted = qs.get('match') || list[0].id;
+    sel.value = wanted;
+    mountWidget(sel.value);
+  } catch (e) {
+    sel.innerHTML = '<option value="">（無法連線到伺服器）</option>';
+  }
+})();
+
+function switchMatch(id) {
+  if (!id) return;
+  // 重新掛載 embed.js 指向新比賽
+  const old = document.getElementById('__flp_widget_holder');
+  if (old) old.remove();
+  document.querySelectorAll('[id^="__flp_widget_"]').forEach(n => n.remove());
+  mountWidget(id);
+  // 也更新 URL 以便分享
+  const u = new URL(location.href);
+  u.searchParams.set('match', id);
+  history.replaceState(null, '', u);
+}
+
+function mountWidget(matchId) {
+  const holder = document.createElement('div');
+  holder.id = '__flp_widget_holder';
+  const s = document.createElement('script');
+  s.src = '/embed.js';
+  s.setAttribute('data-match', matchId);
+  s.setAttribute('data-position', 'bottom-right');
+  holder.appendChild(s);
+  document.body.appendChild(holder);
+}
+</script>
+
+</body>
+</html>
